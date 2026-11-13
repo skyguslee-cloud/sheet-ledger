@@ -557,9 +557,17 @@ const SYNC_MSG = {
    ========================================================= */
 const typeOptions = sel => Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${v}</option>`).join('');
 const catOptions = (type, sel) => CATS[type].map(c => `<option${c === sel ? ' selected' : ''}>${c}</option>`).join('');
+// 이름은 앱을 열 때마다 순서를 섞어서 보여줌 (누가 먼저인지 정해지지 않게). 한 번 연 동안은 모든 화면에서 같은 순서
+const USER_ORDER = (() => {
+  const a = [0, 1, 2, 3, 4];
+  for (let i = a.length - 1; i > 0; i--) { const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+})();
+const usersShuffled = () => USER_ORDER.filter(i => i < state.users.length).map(i => [state.users[i], i]);
 const userOptions = (sel, all) => (all ? '<option value="">전체 사용자</option>' : '') +
-  state.users.map((n, i) => `<option value="${i}"${String(sel) === String(i) ? ' selected' : ''}>${esc(n)}</option>`).join('');
-const userIcon = u => state.avatars?.[u] ? `<i class="av">${esc(state.avatars[u])}</i>` : `<i>${u + 1}</i>`;
+  usersShuffled().map(([n, i]) => `<option value="${i}"${String(sel) === String(i) ? ' selected' : ''}>${esc(n)}</option>`).join('');
+// 캐릭터가 없으면 번호 대신 이름 첫 글자 (번호가 순서처럼 보이지 않게)
+const userIcon = u => state.avatars?.[u] ? `<i class="av">${esc(state.avatars[u])}</i>` : `<i>${esc([...String(state.users[u] || '?')][0].toUpperCase())}</i>`;
 const userBadge = u => `<span class="user u${u}${state.avatars?.[u] ? ' has-av' : ''}">${userIcon(u)}${esc(state.users[u] ?? 'user' + (u + 1))}</span>`;
 
 /* ---------- 이 기기 사용자 (누구세요?) ---------- */
@@ -591,7 +599,7 @@ function refreshUserSelects() {
   $('meBtn').innerHTML = m == null ? '누구세요?' : `${userBadge(m)}${canPickUser() ? ' <small>· 모두 입력 가능</small>' : ''}`;
 }
 function openMeDialog(first = false) {
-  $('meChoices').innerHTML = state.users.map((n, i) =>
+  $('meChoices').innerHTML = usersShuffled().map(([n, i]) =>
     `<button class="btn${me() === i ? ' primary' : ''}" value="${i}">${userBadge(i)}</button>`).join('');
   $('meDlg').dataset.first = first ? '1' : '';
   $('meDlg').showModal();
@@ -1530,7 +1538,7 @@ function renderStats() {
   const inMonth = (list, mm) => list.filter(i => i.date.startsWith(mm));
 
   // 사람 고르기 (이번 달 지출 함께 표시)
-  $('stPeople').innerHTML = state.users.map((n, i) => {
+  $('stPeople').innerHTML = usersShuffled().map(([n, i]) => {
     const e = total(inMonth(state.items.filter(x => x.user === i), m), 'expense');
     return `<button type="button" class="btn${i === u ? ' primary' : ''}" data-u="${i}">${userBadge(i)}<small>${e ? fmt(e) + '원' : '내역 없음'}</small></button>`;
   }).join('');
@@ -1592,7 +1600,7 @@ function renderStats() {
     <div class="kv"><span>가장 많이 쓴 분류</span><b>${yTop && yTop[1] > 0 ? `${esc(yTop[0])} · ${won(yTop[1])}` : '—'}</b></div>`;
 
   // 가족 비교 (이번 달)
-  const fam = state.users.map((n, i) => { const l = inMonth(state.items.filter(x => x.user === i), m); return { i, inc: total(l, 'income'), exp: total(l, 'expense') }; });
+  const fam = usersShuffled().map(([n, i]) => { const l = inMonth(state.items.filter(x => x.user === i), m); return { i, inc: total(l, 'income'), exp: total(l, 'expense') }; });
   const famExp = sum(fam.map(x => x.exp));
   $('stFamTitle').textContent = `${mo}월 가족 비교`;
   $('stFam').innerHTML = fam.map(x => `<tr class="${x.i === u ? 'sel' : ''}"><td>${userBadge(x.i)}</td>
@@ -1949,7 +1957,7 @@ function parseInvite(text) {
   return null;
 }
 function renderSettings() {
-  $('userNames').innerHTML = state.users.map((n, i) =>
+  $('userNames').innerHTML = usersShuffled().map(([n, i]) =>
     `<div class="un"><div class="un-head">${userBadge(i)}<button type="button" class="av-pick" data-av="${i}">${state.avatars[i] ? '바꾸기' : '캐릭터'}</button></div>
       <input data-u="${i}" value="${esc(n)}" maxlength="12" aria-label="${i + 1}번 사용자 이름" style="width:100%;margin-top:6px">
       <label class="ce-pick"><input type="checkbox" data-ce="${i}"${(state.canEnter || []).includes(i) ? ' checked' : ''}> 다른 사람 것도 입력</label></div>`).join('');
