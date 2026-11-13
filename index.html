@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>우리집 가계부</title>
+<meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="가계부">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="logo">₩</span>
+      <div>
+        <h1 id="appTitle">우리집 가계부</h1>
+        <button type="button" class="sync" id="sync" title="눌러서 새로고침"><i></i><span>연결 전</span></button>
+      </div>
+    </div>
+    <div class="who">
+      <button type="button" class="me-btn" id="meBtn" hidden title="이 기기 사용자 바꾸기"></button>
+      <button type="button" class="help-btn" id="helpBtn" title="사용법">사용법</button>
+    </div>
+    <div class="monthnav" id="monthNav">
+      <button class="icon" id="prevM" aria-label="이전 달">‹</button>
+      <input type="month" id="month">
+      <button class="icon" id="nextM" aria-label="다음 달">›</button>
+    </div>
+  </header>
+
+  <!-- ===== 시작 화면: 구글 시트 연결 ===== -->
+  <section id="gate" hidden>
+    <div class="card gate">
+      <h2>시작하기</h2>
+      <p class="muted">입력한 내역은 <b>먼저 이 휴대폰에 저장</b>되고, 인터넷이 되면 가족이 함께 쓰는 <b>구글 시트</b>와 주고받아요. 인터넷이 안 돼도 입력할 수 있어요.</p>
+      <div class="notice" id="gateIos" hidden>
+        <div><b>아이폰은 먼저 홈 화면에 추가해 주세요</b><small>사파리에서 쓰면 오래 안 열었을 때 저장된 내역이 지워질 수 있어요. 아래 공유 버튼(□↑) → <b>홈 화면에 추가</b> → 홈 화면 아이콘으로 열어서 연결하세요.</small></div>
+      </div>
+      <form id="gateForm" class="req">
+        <label class="muted" for="gsUrl">시트 연결 주소 (또는 가족에게 받은 초대 링크)</label>
+        <input id="gsUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false">
+        <label class="muted" for="gsCode">가족 비밀번호</label>
+        <input id="gsCode" type="password" placeholder="시트를 만든 사람이 정한 비밀번호" autocomplete="off">
+        <button class="btn primary block" id="gateJoin">구글 시트에 연결</button>
+      </form>
+      <p class="hint" id="gateMsg"></p>
+      <button type="button" class="btn ghost block" id="gateBack" hidden>‹ 가계부로 돌아가기</button>
+      <div class="or"><span>시트가 아직 없나요?</span></div>
+      <button type="button" class="btn ghost block" id="gateLocal">시트 없이 이 휴대폰에서만 쓰기</button>
+      <p class="hint">나중에 더보기 → 설정에서 언제든 시트에 연결할 수 있어요. 연결하면 그동안 적은 내역도 함께 올라가요. 시트 만드는 방법은 <b>설치안내.md</b>를 보세요.</p>
+    </div>
+  </section>
+
+  <div id="app" hidden>
+    <!-- 아래쪽 탭 -->
+    <nav class="bottombar" id="bottombar">
+      <button data-tab="home" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>홈</button>
+      <button data-tab="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>내역</button>
+      <button class="fab" id="fab" aria-label="내역 추가"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button data-tab="budget" data-group="settle plan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v8h8"/></svg>예산</button>
+      <button data-tab="more" data-group="stats sms fixed settings import"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>더보기</button>
+    </nav>
+
+    <!-- ===== 더보기 ===== -->
+    <section id="tab-more" hidden>
+      <div class="card menu">
+        <button data-tab="plan"><b>우리 가족 조건 · 예산 추천</b><small>가족 구성, 집, 차, 수입을 넣으면 예산을 추천</small><span>›</span></button>
+        <button data-tab="stats"><b>개인별 통계</b><small>사람마다 이번 달·올해 수입, 지출, 많이 쓴 곳</small><span>›</span></button>
+        <button data-tab="sms"><b>문자로 넣기</b><small>카드·은행 문자를 붙여넣어 한 번에 기록</small><span>›</span></button>
+        <button data-tab="fixed"><b>고정 수입·지출 · 카드 할부</b><small>월급, 관리비, 할부처럼 매달 자동 기록</small><span>›</span></button>
+        <button data-tab="import"><b>엑셀·다른 가계부 가져오기</b><small>다른 앱이나 은행·카드사 엑셀, CSV 내역을 더하기</small><span>›</span></button>
+        <button data-tab="settings"><b>설정</b><small>가족 초대, 이름, 백업</small><span>›</span></button>
+        <button data-act="manual"><b>사용법</b><small>처음이라면 한 번 읽어보세요</small><span>›</span></button>
+        <button data-act="install" id="installBtn" hidden><b>홈 화면에 앱으로 설치</b><small>아이콘을 눌러 바로 열기</small><span>›</span></button>
+      </div>
+    </section>
+
+    <!-- ===== 홈: 분류별 블록 ===== -->
+    <section id="tab-home">
+      <div class="notice" id="iosNotice" hidden>
+        <div><b>홈 화면에 추가해 주세요</b><small>아이폰 사파리에서 그냥 쓰면, 오래 안 열었을 때 이 휴대폰에 저장된 내역이 지워질 수 있어요. 공유 버튼(□↑) → <b>홈 화면에 추가</b> 후 아이콘으로 여세요.</small></div>
+        <span class="filters"><button type="button" class="btn sm ghost" data-act="ios-later">나중에</button><button type="button" class="btn sm primary" data-act="ios-how">방법 보기</button></span>
+      </div>
+      <div class="notice" id="planNotice" hidden>
+        <div><b>우리 가족 조건을 넣어 보세요</b><small>가족 구성, 집, 차, 수입을 넣으면 분류별 예산을 추천해 드려요. 나중에 언제든 바꿀 수 있어요.</small></div>
+        <span class="filters"><button type="button" class="btn sm ghost" data-act="plan-later">나중에</button><button type="button" class="btn sm primary" data-act="plan-go">시작하기</button></span>
+      </div>
+      <div class="notice" id="backupNotice" hidden>
+        <div><b id="backupNoticeTitle">백업한 지 오래됐어요</b><small id="backupNoticeText">가계부 전체를 파일 하나로 저장해 둬요.</small></div>
+        <span class="filters"><button type="button" class="btn sm ghost" data-act="backup-later">일주일 뒤에</button><button type="button" class="btn sm primary" data-act="backup-now">지금 백업</button></span>
+      </div>
+      <div class="notice" id="settleNotice" hidden></div>
+      <div class="metrics">
+        <div class="metric"><div class="label" id="hmIncLabel">수입</div><div class="value" id="hmIncome">0</div></div>
+        <div class="metric"><div class="label" id="hmExpLabel">지출</div><div class="value" id="hmExpense">0</div></div>
+        <div class="metric"><div class="label">남은 돈</div><div class="value" id="hmBalance">0</div></div>
+      </div>
+      <div class="sec-head">
+        <h2>지출 · 분류별</h2>
+        <span class="legend"><span class="chip solid">자동</span> 고정 항목 <span class="chip">문자</span> 문자 인식</span>
+      </div>
+      <div class="blocks" id="homeExpense" data-type="expense"></div>
+      <div class="sec-head"><h2>수입 · 분류별</h2></div>
+      <div class="blocks" id="homeIncome" data-type="income"></div>
+      <div class="transfer-line" id="homeTransfer"></div>
+    </section>
+
+    <!-- ===== 내역 ===== -->
+    <section id="tab-ledger" hidden>
+      <div class="card">
+        <div class="summary">
+          <div><div class="label">수입</div><div class="value" id="sumIncome">0</div></div>
+          <div><div class="label">지출</div><div class="value" id="sumExpense">0</div></div>
+          <div><div class="label">수입 − 지출</div><div class="value" id="sumBalance">0</div></div>
+          <div><div class="label">이체 · 합계 제외</div><div class="value dim" id="sumTransfer">0</div></div>
+        </div>
+        <div class="budgetline" id="budgetLine" hidden></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2 id="formTitle">내역 추가</h2></div>
+        <form id="form" class="grid-form">
+          <input type="date" id="fmDate" required>
+          <input type="time" id="fmTime">
+          <select id="fmType"></select>
+          <select id="fmCat"></select>
+          <select id="fmUser"></select>
+          <input type="text" id="fmMethod" placeholder="결제수단" list="methodList" maxlength="40">
+          <input type="text" id="fmMemo" placeholder="내용 / 사용처" maxlength="200">
+          <input type="number" id="fmAmount" placeholder="금액" step="1" required>
+          <button type="submit" class="btn primary" id="fmSubmit">추가</button>
+          <button type="button" class="btn" id="fmCancel" hidden>취소</button>
+        </form>
+        <datalist id="methodList"></datalist>
+      </div>
+
+      <div class="two">
+        <div class="card"><div class="card-head"><h2>분류별 지출</h2></div><div class="rows" id="catRows"></div></div>
+        <div class="card"><div class="card-head"><h2>사용자별 지출</h2><button type="button" class="btn sm" data-tab="stats">개인별 통계 ›</button></div><div class="rows" id="userRows"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="listTitle">내역</h2>
+          <div class="filters">
+            <input type="search" id="fQuery" placeholder="🔍 내용·금액 검색 (모든 달)" maxlength="40" aria-label="내역 검색">
+            <select id="fUser"></select>
+            <select id="fType">
+              <option value="">전체</option>
+              <option value="expense">지출</option>
+              <option value="income">수입</option>
+              <option value="transfer">이체</option>
+            </select>
+          </div>
+        </div>
+        <div class="search-info" id="searchInfo" hidden></div>
+        <div class="table-wrap">
+          <table class="list">
+            <tbody id="list"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 월말 결산 ===== -->
+    <section id="tab-settle" hidden>
+      <button class="back" data-tab="budget">‹ 예산</button>
+      <div class="card">
+        <div class="card-head"><h2 id="stlTitle">월말 결산</h2><span class="chip" id="stlState"></span></div>
+        <div class="summary" id="stlSummary"></div>
+        <p class="hint" id="stlHint"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="stlNextTitle">다음 달 예산 정하기</h2>
+          <div class="filters">
+            <button type="button" class="btn sm" id="stlFillRec">추천대로 채우기</button>
+            <button type="button" class="btn sm" id="stlFillCur">이번 달 예산 그대로</button>
+          </div>
+        </div>
+        <p class="hint top">추천 금액은 <b>최근 3개월 평균 지출</b>(이번 달은 남은 고정 지출 포함)을 보고 정합니다. 예산과 비슷하게 썼으면 그대로 두고, 자주 넘었거나 많이 남았으면 평균에 맞춰 만원 단위로 바꿔요. 칸을 눌러 직접 고칠 수 있어요.</p>
+        <div class="table-wrap">
+          <table class="budget settle">
+            <thead><tr><th>분류</th><th class="num">이번 달<small>사용 / 예산</small></th><th class="num avg">3개월 평균</th><th class="num">다음 달 예산</th></tr></thead>
+            <tbody id="stlBody"></tbody>
+            <tfoot id="stlFoot"></tfoot>
+          </table>
+        </div>
+        <div class="toolbar end">
+          <button type="button" class="btn primary" id="stlSave">다음 달 예산으로 저장</button>
+        </div>
+        <p class="hint">여행/숙박 · 경조/선물 · 미용 · 의류쇼핑은 1년 예산이라 여기서는 빠집니다. 저장하면 다음 달 예산이 이 금액으로 정해지고, 다음 달 1일에 지난 예산이 자동으로 복사되지 않아요.</p>
+      </div>
+    </section>
+
+    <!-- ===== 우리 가족 조건 · 예산 추천 ===== -->
+    <section id="tab-plan" hidden>
+      <button class="back" data-tab="budget">‹ 예산</button>
+      <div class="card">
+        <div class="card-head"><h2>우리 가족 조건</h2><span class="chip" id="planState"></span></div>
+        <p class="hint top">조건을 고르면 아래 추천 예산이 바로 바뀌어요. 저장해 두면 가족 모두 같은 조건을 보고, 언제든 다시 고칠 수 있어요.</p>
+        <form id="planForm" class="plan-form" autocomplete="off">
+          <fieldset>
+            <legend>가족 구성 <small>(명)</small></legend>
+            <div class="plan-grid">
+              <label>어른<input type="number" name="adults" min="1" max="6" inputmode="numeric"></label>
+              <label><span>영유아 <small>0~7세</small></span><input type="number" name="infant" min="0" max="6" inputmode="numeric"></label>
+              <label>초등학생<input type="number" name="elem" min="0" max="6" inputmode="numeric"></label>
+              <label>중학생<input type="number" name="middle" min="0" max="6" inputmode="numeric"></label>
+              <label>고등학생<input type="number" name="high" min="0" max="6" inputmode="numeric"></label>
+              <label>대학생<input type="number" name="univ" min="0" max="6" inputmode="numeric"></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>사는 곳 · 집 · 차</legend>
+            <div class="plan-grid">
+              <label>사는 곳<select name="region"></select></label>
+              <label>집<select name="home"></select></label>
+              <label><span>월 주거비 <small>관리비·월세·대출이자</small></span><input type="number" name="housing" min="0" step="10000" inputmode="numeric"></label>
+              <label>자동차<select name="cars"><option value="0">없음</option><option value="1">1대</option><option value="2">2대</option></select></label>
+              <label>반려동물<select name="pets"><option value="0">없음</option><option value="1">1마리</option><option value="2">2마리</option></select></label>
+              <label>사교육<select name="tutoring"></select></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>수입 · 저축 <small>(한 달, 원)</small></legend>
+            <div class="plan-grid">
+              <label>가족 실수령 합계<input type="number" name="income" min="0" step="10000" inputmode="numeric"></label>
+              <label>매달 저축 목표<input type="number" name="goal" min="0" step="10000" inputmode="numeric"></label>
+              <label>부모님 용돈<input type="number" name="parents" min="0" step="10000" inputmode="numeric"></label>
+            </div>
+            <p class="hint" id="planIncomeHint"></p>
+          </fieldset>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>추천 예산</h2>
+          <div class="filters">
+            <button type="button" class="btn sm" id="planFit">저축 목표에 맞추기</button>
+            <button type="button" class="btn sm ghost" id="planReset">추천값으로 되돌리기</button>
+          </div>
+        </div>
+        <div class="summary" id="planSummary"></div>
+        <p class="hint" id="planHint"></p>
+        <div class="table-wrap">
+          <table class="budget plan">
+            <thead><tr><th>분류</th><th class="num why">추천 근거</th><th class="num">지금 예산</th><th class="num">새 예산</th></tr></thead>
+            <tbody id="planBody"></tbody>
+            <tfoot id="planFoot"></tfoot>
+          </table>
+        </div>
+        <div class="toolbar end">
+          <label class="inline">적용 시작 <input type="month" id="planFrom"></label>
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="planSaveProfile">조건만 저장</button>
+          <button type="button" class="btn primary" id="planSave">이 예산으로 저장</button>
+        </div>
+        <p class="hint">추천 금액은 이 앱의 <b>기본 추정치</b>예요(공식 통계가 아니에요). 어른·아이 수와 학년, 사는 곳, 집·차를 보고 계산하고, 만원 단위로 맞춰요. 칸을 눌러 직접 고칠 수 있고, 고친 칸은 조건을 바꿔도 그대로 둬요.
+          저장하면 <b>적용 시작 달</b>의 월간 예산과 <b>그해</b> 연간 예산이 이 금액으로 바뀌고, 다음 달부터는 자동으로 이어져요.</p>
+      </div>
+    </section>
+
+    <!-- ===== 개인별 통계 ===== -->
+    <section id="tab-stats" hidden>
+      <button class="back" data-tab="more">‹ 더보기</button>
+      <div class="card">
+        <div class="card-head"><h2>누구의 통계를 볼까요?</h2></div>
+        <div class="stat-people" id="stPeople"></div>
+      </div>
+
+      <div class="metrics" id="stMetrics"></div>
+
+      <div class="two">
+        <div class="card"><div class="card-head"><h2 id="stCatTitle">분류별 지출</h2></div><div class="rows" id="stCats"></div></div>
+        <div class="card"><div class="card-head"><h2>최근 6개월 지출</h2></div><div class="rows" id="stTrend"></div></div>
+      </div>
+
+      <div class="two">
+        <div class="card"><div class="card-head"><h2 id="stTopTitle">많이 쓴 곳</h2></div><div class="rows" id="stTop"></div></div>
+        <div class="card"><div class="card-head"><h2 id="stYearTitle">올해</h2></div><div id="stYear"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2 id="stFamTitle">가족 비교</h2></div>
+        <div class="table-wrap">
+          <table class="budget stat-fam">
+            <thead><tr><th>이름</th><th class="num">수입</th><th class="num">지출</th><th class="num diff">수입 − 지출</th><th class="prog">지출 비중</th></tr></thead>
+            <tbody id="stFam"></tbody>
+          </table>
+        </div>
+        <p class="hint">이체(내 계좌 이체, 카드대금 등)는 합계에서 뺍니다. 환불은 지출에서 빠집니다.</p>
+      </div>
+    </section>
+
+    <!-- ===== 문자 등록 ===== -->
+    <section id="tab-sms" hidden>
+      <button class="back" data-tab="more">‹ 더보기</button>
+      <div class="card">
+        <div class="card-head"><h2>카드 승인 · 입출금 문자 붙여넣기</h2></div>
+        <textarea id="smsText" rows="9" placeholder="카카오톡 알림톡이나 문자 메시지를 그대로 복사해서 붙여넣으세요.&#10;여러 건은 빈 줄로 구분하면 한 번에 인식합니다.&#10;&#10;예)&#10;[Web발신]&#10;신한카드(1234)승인 홍*동 12,500원(일시불)11/11 12:34 스타벅스강남점 누적1,234,567원"></textarea>
+        <div class="toolbar">
+          <label class="inline">누가 쓴 건가요? <select id="smsUser"></select></label>
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="smsSample">예시 넣기</button>
+          <button type="button" class="btn" id="smsPaste">붙여넣기</button>
+          <button type="button" class="btn primary" id="smsParse">인식하기</button>
+        </div>
+        <p class="hint">카드 승인 → 지출 · 승인취소 → 지출 차감(환불) · 입금 → 수입 · 출금/송금 → 이체. 사용처로 분류를 추측하고, 직접 고친 분류는 다음부터 기억합니다.</p>
+      </div>
+      <div class="card" id="smsResultCard" hidden>
+        <div class="card-head">
+          <h2 id="smsResultTitle">인식 결과</h2>
+          <button type="button" class="btn primary" id="smsAdd">선택 항목 추가</button>
+        </div>
+        <div class="table-wrap">
+          <table class="sms-table">
+            <thead><tr><th></th><th>날짜</th><th>구분</th><th>분류</th><th>사용자</th><th>결제수단</th><th>내용</th><th>금액</th><th>원문</th></tr></thead>
+            <tbody id="smsRows"></tbody>
+          </table>
+        </div>
+        <p class="hint">점선 표시 줄은 같은 날짜·금액·내용이 이미 있어 중복으로 보이는 항목입니다(기본 선택 해제).</p>
+      </div>
+    </section>
+
+    <!-- ===== 예산 ===== -->
+    <section id="tab-budget" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="budgetTitle">월간 예산</h2>
+          <div class="filters">
+            <button type="button" class="btn sm primary" data-tab="settle">월말 결산</button>
+            <button type="button" class="btn sm" data-tab="plan">가족 조건으로 추천</button>
+            <button type="button" class="btn sm" id="copyPrev">지난 예산 불러오기</button>
+            <button type="button" class="btn sm ghost" id="clearBudget">비우기</button>
+          </div>
+        </div>
+        <p class="hint top" id="budgetHint"></p>
+        <div class="table-wrap">
+          <table class="budget">
+            <thead><tr><th>분류</th><th class="num">예산</th><th class="num">사용</th><th class="num">남음</th><th class="prog">진행</th></tr></thead>
+            <tbody id="budgetBody"></tbody>
+            <tfoot id="budgetFoot"></tfoot>
+          </table>
+        </div>
+        <p class="hint">예산은 달마다 따로 저장됩니다. 비워두면 그 분류는 예산 없음. 사용 금액은 모든 사용자의 지출 합계입니다.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="annualTitle">연간 예산</h2>
+          <div class="filters">
+            <button type="button" class="btn sm" id="copyPrevYear">작년 예산 불러오기</button>
+            <button type="button" class="btn sm ghost" id="clearAnnual">비우기</button>
+          </div>
+        </div>
+        <p class="hint top" id="annualHint"></p>
+        <div class="table-wrap">
+          <table class="budget">
+            <thead><tr><th>분류</th><th class="num">연간 예산</th><th class="num">올해 사용</th><th class="num">이번 달</th><th class="num">남음</th><th class="prog">진행</th></tr></thead>
+            <tbody id="annualBody"></tbody>
+            <tfoot id="annualFoot"></tfoot>
+          </table>
+        </div>
+        <p class="hint">여행/숙박 · 경조/선물(명절 포함) · 미용 · 의류쇼핑 · 자동차보험/세금 · 재산세 · 가전/가구는 1년 단위로 관리하며 월간 예산에는 넣지 않습니다.</p>
+      </div>
+    </section>
+
+    <!-- ===== 고정 수입·지출 ===== -->
+    <section id="tab-import" hidden>
+      <button class="back" data-tab="more">‹ 더보기</button>
+      <div class="card">
+        <div class="card-head"><h2>📥 엑셀·다른 가계부 가져오기</h2></div>
+        <p class="hint" style="margin-top:0">다른 가계부 앱이나 은행·카드사에서 내려받은 <b>엑셀(.xlsx, .xls)이나 CSV</b> 파일을 고르세요. 지금 내역은 그대로 두고 <b>더하기만</b> 해요. 이미 있는 내역(같은 날짜·금액·내용)은 건너뛰어요.</p>
+        <div class="toolbar">
+          <label class="btn primary">파일 고르기<input type="file" id="impFile" accept=".xlsx,.xls,.csv,.txt" hidden></label>
+          <span class="muted" id="impFileName"></span>
+        </div>
+      </div>
+      <div class="card" id="impMapCard" hidden>
+        <div class="card-head"><h2>열 맞추기</h2><select id="impSheet" aria-label="시트"></select></div>
+        <p class="hint" style="margin-top:0">파일의 어느 열이 무엇인지 골라 주세요. 제목을 보고 미리 짐작해 두었어요. <b>날짜</b>와 <b>금액</b>은 꼭 있어야 해요.</p>
+        <div class="imp-map" id="impMap"></div>
+        <div class="imp-opts">
+          <label>사용자 열이 없으면 <select id="impUser"></select></label>
+          <label>구분 열이 없을 때, 금액이 +이면 <select id="impPlus"><option value="expense">지출 (−는 수입)</option><option value="income">수입 (−는 지출)</option></select></label>
+        </div>
+      </div>
+      <div class="card" id="impPrevCard" hidden>
+        <div class="card-head"><h2 id="impPrevTitle">미리보기</h2></div>
+        <div class="search-info" id="impSummary"></div>
+        <div class="table-wrap"><table class="list"><tbody id="impPrev"></tbody></table></div>
+        <p class="hint" id="impNote"></p>
+        <div class="toolbar"><button type="button" class="btn primary" id="impAdd">가져오기</button></div>
+      </div>
+    </section>
+
+    <section id="tab-fixed" hidden>
+      <button class="back" data-tab="more">‹ 더보기</button>
+      <div class="card">
+        <div class="card-head"><h2>고정 수입 · 지출</h2></div>
+        <div id="recList"></div>
+        <p class="hint">정해진 날이 되면 그 달 내역에 자동으로 기록됩니다. 자동 기록된 내역을 지우면 그 달에는 다시 생기지 않습니다.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 id="recFormTitle">새 고정 항목</h2></div>
+        <form id="recForm" class="grid-form">
+          <input id="rcTitle" placeholder="이름 (예: 월급)" required maxlength="60">
+          <select id="rcType"></select>
+          <select id="rcCat"></select>
+          <select id="rcUser"></select>
+          <label class="inline">매월 <input type="number" id="rcDay" min="1" max="31" value="1" style="width:64px"> 일</label>
+          <input id="rcMethod" placeholder="결제수단/계좌 (선택)" list="methodList" maxlength="40">
+          <input type="number" id="rcAmount" placeholder="금액" min="1" step="1" class="rc-new">
+          <select id="rcStart" class="rc-new"></select>
+          <button type="submit" class="btn primary" id="rcSubmit">등록</button>
+          <button type="button" class="btn" id="rcCancel" hidden>취소</button>
+        </form>
+      </div>
+      <div class="card" id="instCard">
+        <div class="card-head"><h2>💳 카드 할부</h2><span class="muted" id="instSum"></span></div>
+        <div id="instList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>새 할부 등록</h2></div>
+        <form id="instForm" class="grid-form">
+          <input id="inTitle" placeholder="무엇을 샀나요 (예: 냉장고)" required maxlength="60">
+          <input type="number" id="inTotal" placeholder="총 할부 금액" min="2" step="1" required>
+          <label class="inline"><input type="number" id="inMonths" min="2" max="60" value="12" required style="width:64px"> 개월</label>
+          <label class="inline">첫 청구 <input type="month" id="inStart" required></label>
+          <label class="inline">매월 <input type="number" id="inDay" min="1" max="31" value="15" style="width:64px"> 일</label>
+          <select id="inCat" aria-label="분류"></select>
+          <select id="inUser" aria-label="사용자"></select>
+          <input id="inMethod" placeholder="카드 (예: 신한카드)" list="methodList" maxlength="40">
+          <label class="inline" id="inPastWrap" hidden><input type="checkbox" id="inPast"> 지난 회차도 내역에 기록</label>
+          <button type="submit" class="btn primary" id="inSubmit">할부 등록</button>
+        </form>
+        <p class="hint" id="instPreview"></p>
+        <p class="hint">매달 청구 금액이 그 달 내역에 자동으로 기록돼요. 나누어 떨어지지 않는 끝전은 첫 달에 붙어요. 무이자가 아니면 <b>수수료를 더한 총 금액</b>을 넣으세요. 산 날 전체 금액을 이미 내역에 적었다면 그 내역은 지워야 두 번 잡히지 않아요.</p>
+      </div>
+    </section>
+
+    <!-- ===== 설정 ===== -->
+    <section id="tab-settings" hidden>
+      <button class="back" data-tab="more">‹ 더보기</button>
+      <div class="card">
+        <div class="card-head"><h2>구글 시트 연결</h2></div>
+        <p class="muted" id="gsStatus"></p>
+        <div class="toolbar">
+          <button type="button" class="btn primary" id="gsSyncNow">지금 주고받기</button>
+          <button type="button" class="btn" id="gsInvite">가족 초대 링크 복사</button>
+          <button type="button" class="btn" id="gsChange">연결 바꾸기</button>
+          <button type="button" class="btn ghost" id="gsDisconnect">연결 끊기</button>
+        </div>
+        <p class="hint">초대 링크에는 시트 주소와 가족 비밀번호가 들어 있어요. 가족에게만 보내 주세요. 1분마다, 그리고 저장할 때마다 자동으로 주고받아요.</p>
+        <p class="hint" id="devInfo"></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>가계부 이름 · 사용자</h2></div>
+        <label class="muted" for="bookTitle">가계부 이름 (맨 위에 보여요, 가족 휴대폰에도 같이 바뀌어요)</label>
+        <input id="bookTitle" maxlength="20" placeholder="우리집 가계부" style="width:100%;margin:6px 0 14px">
+        <div class="grid-form" id="userNames"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>백업 · 내보내기</h2></div>
+        <div class="toolbar">
+          <button type="button" class="btn" id="exportJson">전체 백업 (JSON)</button>
+          <label class="btn">백업 불러오기<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+          <button type="button" class="btn" id="exportCsv">CSV 내보내기</button>
+          <button type="button" class="btn" data-tab="import">엑셀·다른 가계부 가져오기</button>
+        </div>
+        <p class="hint" id="backupInfo"></p>
+        <p class="hint">휴대폰에서는 카카오톡·메일·드라이브로 보낼 수 있는 공유 창이 떠요. 백업 불러오기는 현재 가계부 내용을 백업 파일 내용으로 <b>바꿉니다</b>.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>위험 구역</h2></div>
+        <div class="toolbar">
+          <button type="button" class="btn" id="wipeDevice">이 휴대폰의 가계부 지우기</button>
+          <button type="button" class="btn danger" id="clearAll">전체 데이터 삭제</button>
+        </div>
+        <p class="hint">"이 휴대폰의 가계부 지우기"는 시트 내용은 그대로 두고 이 기기만 비워요. "전체 데이터 삭제"는 시트와 가족 휴대폰에서도 지워요.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- 고정 금액 변경 -->
+<dialog id="amtDlg">
+  <form method="dialog" id="amtForm">
+    <h2 id="amtTitle">금액 변경</h2>
+    <input type="number" id="amtValue" min="1" step="1" required>
+    <label class="radio"><input type="radio" name="amtWhen" value="this" checked> <span id="amtThis">이번 달부터</span></label>
+    <label class="radio"><input type="radio" name="amtWhen" value="next"> <span id="amtNext">다음 달부터</span></label>
+    <p class="hint" id="amtHint"></p>
+    <div class="toolbar end">
+      <button class="btn" value="cancel" formnovalidate>취소</button>
+      <button class="btn primary" value="ok">변경</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 이 기기 사용자 선택 -->
+<dialog id="meDlg">
+  <form method="dialog">
+    <h2>누구세요?</h2>
+    <p class="muted">이 기기에서 입력하는 내역은 고른 사람 이름으로 자동 기록됩니다. 나중에 위쪽 이름을 눌러 바꿀 수 있어요.</p>
+    <div class="me-grid" id="meChoices"></div>
+    <p class="hint">캐릭터(이모지)는 더보기 → 설정 → 사용자 이름에서 고를 수 있어요.</p>
+  </form>
+</dialog>
+
+<!-- 사용자 캐릭터 고르기 -->
+<dialog id="avDlg">
+  <form method="dialog">
+    <h2 id="avTitle">캐릭터 고르기</h2>
+    <div class="av-grid" id="avGrid"></div>
+    <div class="dlg-actions">
+      <button class="btn ghost" value="none">기본 배지로</button>
+      <button class="btn" value="cancel">닫기</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 빠른 추가 -->
+<dialog id="qaDlg" class="sheet">
+  <form id="qaForm">
+    <div class="sheet-head">
+      <h2>내역 추가</h2>
+      <button type="button" class="icon" data-qa="close" aria-label="닫기">✕</button>
+    </div>
+    <div class="seg" id="qaType">
+      <button type="button" data-v="expense" class="on">지출</button>
+      <button type="button" data-v="income">수입</button>
+      <button type="button" data-v="transfer">이체</button>
+    </div>
+    <label class="qa-amount"><input id="qaAmount" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="금액"><span>원</span></label>
+    <div class="chips" id="qaCats"></div>
+    <input id="qaMemo" placeholder="어디서? (예: 스타벅스)" list="memoList" maxlength="200" autocomplete="off">
+    <datalist id="memoList"></datalist>
+    <div class="qa-row">
+      <input type="date" id="qaDate" aria-label="날짜">
+      <select id="qaUser" aria-label="사용자"></select>
+    </div>
+    <p class="hint" id="qaMsg"></p>
+    <button class="btn primary block big" id="qaSave">저장</button>
+    <button type="button" class="btn ghost block" data-qa="sms">카드·은행 문자로 넣기</button>
+  </form>
+</dialog>
+
+<!-- 사용법 -->
+<dialog id="helpDlg" class="sheet tall">
+  <div class="sheet-head">
+    <h2>사용법</h2>
+    <button type="button" class="icon" data-help="close" aria-label="닫기">✕</button>
+  </div>
+  <div class="manual">
+    <h3>1. 처음 시작하기</h3>
+    <ol>
+      <li>가족에게 받은 <b>초대 링크</b>를 누르면 구글 시트에 바로 연결돼요. 링크 대신 주소와 비밀번호를 받았다면 시작 화면에 넣으세요.</li>
+      <li><b>누구세요?</b> 창에서 내 이름을 고르세요. 이 기기에서 적는 내역은 그 이름으로 기록됩니다.</li>
+      <li>이름을 잘못 골랐다면 위쪽 <b>내 이름</b>을 눌러 바꾸면 됩니다.</li>
+      <li>시트 없이 <b>이 휴대폰에서만</b> 쓸 수도 있어요. 나중에 시트에 연결하면 그동안 적은 내역도 함께 올라가요.</li>
+    </ol>
+    <h3>내 내역은 어디에 저장되나요?</h3>
+    <ul>
+      <li>먼저 <b>이 휴대폰 안</b>에 저장돼요. 인터넷이 안 돼도 입력할 수 있어요.</li>
+      <li>인터넷이 되면 저장할 때마다, 그리고 1분마다 <b>구글 시트</b>와 주고받아요. 위쪽 작은 글자에 "동기화됨"이나 "보낼 것 N건"이 보여요.</li>
+      <li>같은 내역을 두 사람이 고치면 <b>나중에 고친 쪽</b>이 남아요.</li>
+      <li>시트에서 금액·메모를 직접 고쳐도 휴대폰에 반영돼요. 시트에서 줄을 지우지 말고 <b>deleted</b> 칸에 1을 넣으세요.</li>
+    </ul>
+    <h3>2. 돈 쓴 것 적기</h3>
+    <ol>
+      <li>아래 가운데 <b>＋</b> 버튼을 누릅니다.</li>
+      <li>금액을 넣고, 분류(식비, 카페 등)를 하나 누르고, <b>저장</b>.</li>
+      <li>날짜는 오늘로 자동 입력됩니다. 지난 날짜는 날짜 칸을 눌러 바꾸세요.</li>
+    </ol>
+    <p class="tip">같은 가게를 한 번 분류해 두면 다음부터 자동으로 그 분류가 선택됩니다.</p>
+    <h3>3. 카드 문자로 한 번에 넣기</h3>
+    <ol>
+      <li>카드·은행 문자(카카오톡 알림)를 길게 눌러 <b>복사</b>합니다.</li>
+      <li>＋ → <b>카드·은행 문자로 넣기</b> → <b>붙여넣기</b> → <b>인식하기</b>.</li>
+      <li>내용을 확인하고 <b>선택 항목 추가</b>. 여러 건을 한꺼번에 넣을 수 있어요.</li>
+    </ol>
+    <h3>4. 보고 고치기</h3>
+    <ul>
+      <li><b>홈</b>: 이번 달 분류별 합계. 큰 금액은 <b>만원 단위</b>(예: 160만원)로 짧게 보여요. 블록을 누르면 정확한 금액과 누가·어떻게 썼는지가 펼쳐지고, ✎로 고치고 🗑로 지웁니다.</li>
+      <li>더보기 → 설정 → 사용자 이름에서 <b>캐릭터</b>를 눌러 나를 나타낼 이모지를 고를 수 있어요.</li>
+      <li>잘못 지웠다면 아래에 잠깐 뜨는 <b>되돌리기</b>를 누르세요.</li>
+      <li><b>내역</b>: 전체 목록. 사람별, 수입/지출별로 골라 볼 수 있어요. <b>🔍 검색</b> 칸에 사용처·분류·금액(예: 스타벅스, 45000)을 넣으면 모든 달에서 찾아 합계까지 보여줘요.</li>
+      <li>가족이 저장한 내용은 구글 시트를 거쳐 1분 안팎으로 내 휴대폰에도 들어와요. 입력 중일 때는 다 쓰고 나서 화면이 바뀌어요.</li>
+      <li>더보기 → <b>고정 수입·지출 · 카드 할부</b>: 할부로 산 물건의 총 금액과 개월 수를 넣으면 매달 청구 금액이 자동 기록되고, 몇 회차인지와 남은 금액을 보여줘요. 미리 다 갚으면 <b>중도 완납</b>을 누르세요.</li>
+      <li>더보기 → <b>엑셀·다른 가계부 가져오기</b>: 다른 앱이나 은행·카드사의 엑셀·CSV 파일을 골라 열을 맞추면 지금 내역에 더해요. 이미 있는 내역은 건너뛰어요.</li>
+      <li>더보기 → 설정 → <b>백업</b>: 가계부 전체를 파일로 저장해요. 30일 넘게 백업하지 않으면 홈에 알림이 떠요.</li>
+      <li><b>더보기 → 개인별 통계</b>: 사람을 고르면 그 사람의 이번 달 수입·지출, 분류별 지출, 최근 6개월, 많이 쓴 곳, 가족 비교를 봅니다.</li>
+      <li>위쪽 <b>‹ 11월 ›</b>으로 다른 달을 봅니다.</li>
+    </ul>
+    <h3>5. 예산</h3>
+    <ul>
+      <li><b>예산</b> 탭에서 분류별 한 달 예산을 적습니다. <b>새 달이 되면 지난달 예산이 자동으로 이어집니다.</b> 바꾸고 싶은 칸만 고치면 그 달에만 적용돼요.</li>
+      <li>여행, 경조사·명절, 미용, 옷, 자동차보험·세금, 재산세, 가전·가구는 <b>1년 예산</b>으로 따로 관리합니다.</li>
+      <li><b>가족 조건으로 추천</b>: 예산 탭(또는 더보기 → 우리 가족 조건)에서 어른·아이 수와 학년, 사는 곳, 집, 차, 수입, 저축 목표를 넣으면 분류별 예산을 추천해 줘요. 칸을 고쳐서 저장하면 되고, 조건은 나중에 언제든 바꿀 수 있어요.</li>
+      <li>막대가 회색 → 검정(80% 넘음) → 빗금(초과)으로 바뀝니다.</li>
+      <li><b>월말 결산</b>: 매달 25일부터 홈 화면에 알림이 뜹니다. 이번 달 쓴 돈을 확인하고, 최근 3개월 지출을 보고 추천한 금액으로 <b>다음 달 예산</b>을 정해 저장하세요. 예산 탭의 <b>월말 결산</b> 버튼으로 언제든 열 수 있어요.</li>
+    </ul>
+    <h3>6. 월급처럼 매달 들어오는 돈</h3>
+    <ul>
+      <li>더보기 → <b>고정 수입·지출</b>에 등록하면 매달 정한 날 <b>자동</b>으로 기록됩니다.</li>
+      <li>금액이 바뀌면 <b>금액 변경</b>에서 "이번 달부터 / 다음 달부터"를 고르세요.</li>
+    </ul>
+    <h3>7. 휴대폰 홈 화면에 앱으로 두기 (꼭 해 주세요)</h3>
+    <ul>
+      <li><b>안드로이드(크롬)</b>: 더보기 → 홈 화면에 앱으로 설치. 버튼이 없으면 크롬 메뉴(⋮) → <b>홈 화면에 추가</b>.</li>
+      <li><b>아이폰(사파리)</b>: 아래 공유 버튼(□↑) → <b>홈 화면에 추가</b>. 그다음부터는 <b>홈 화면 아이콘으로만</b>여세요.</li>
+      <li>아이폰은 사파리 저장 공간과 홈 화면 앱 저장 공간이 따로예요. 홈 화면 아이콘으로 처음 열면 초대 링크를 한 번 더 붙여넣어 주세요.</li>
+      <li>아이폰 사파리는 홈 화면에 추가하지 않은 사이트의 저장 내용을 오래 안 쓰면 지울 수 있어요. 시트에 연결해 두면 지워져도 다시 받아올 수 있어요.</li>
+    </ul>
+    <h3>자주 묻는 질문</h3>
+    <ul>
+      <li><b>가족이 적은 게 안 보여요</b> → 위쪽 "동기화" 글자를 누르면 바로 주고받아요. 상대방 휴대폰이 인터넷에 연결돼야 올라와요.</li>
+      <li><b>"보낼 것 N건"이 계속 남아 있어요</b> → 인터넷 연결을 확인하고 위쪽 글자를 눌러 보세요. 이 휴대폰에는 안전하게 저장돼 있어요.</li>
+      <li><b>다른 사람 것도 적고 싶어요</b> → 더보기 → 설정 → 사용자 이름에서 "다른 사람 것도 입력"에 체크된 사람만 다른 사람 이름으로 적을 수 있어요.</li>
+      <li><b>새 휴대폰으로 바꿨어요</b> → 초대 링크로 다시 연결하면 시트에서 전부 받아와요. 시트 없이 썼다면 예전 휴대폰에서 백업 파일을 만들어 새 휴대폰에서 불러오세요.</li>
+    </ul>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" hidden><span id="toastMsg"></span><button type="button" id="toastAction" hidden></button></div>
+
+<script src="app.js"></script>
+</body>
+</html>
