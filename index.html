@@ -515,7 +515,22 @@
     <h2>누구세요?</h2>
     <p class="muted">이 기기에서 입력하는 내역은 고른 사람 이름으로 자동 기록됩니다. 나중에 위쪽 이름을 눌러 바꿀 수 있어요.</p>
     <div class="me-grid" id="meChoices"></div>
-    <p class="hint">캐릭터(이모지)는 더보기 → 설정 → 사용자 이름에서 고를 수 있어요.</p>
+    <p class="hint">이름을 고르면 그 사람 비밀번호를 물어요. 처음 고르는 사람은 비밀번호를 새로 만들어요.</p>
+  </form>
+</dialog>
+
+<!-- 사람별 비밀번호 -->
+<dialog id="pinDlg">
+  <form id="pinForm">
+    <h2 id="pinTitle">비밀번호</h2>
+    <p class="muted" id="pinText"></p>
+    <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="숫자 4~8자리" autocomplete="off" aria-label="비밀번호" style="width:100%;margin-top:8px">
+    <input id="pinInput2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="한 번 더 넣기" autocomplete="off" aria-label="비밀번호 확인" style="width:100%;margin-top:8px" hidden>
+    <p class="hint" id="pinMsg" role="alert"></p>
+    <div class="toolbar end">
+      <button type="button" class="btn" id="pinCancel">취소</button>
+      <button class="btn primary" id="pinOk">확인</button>
+    </div>
   </form>
 </dialog>
 
@@ -567,7 +582,7 @@
     <h3>1. 처음 시작하기</h3>
     <ol>
       <li>가족에게 받은 <b>초대 링크</b>를 누르면 구글 시트에 바로 연결돼요. 링크 대신 주소와 비밀번호를 받았다면 시작 화면에 넣으세요.</li>
-      <li><b>누구세요?</b> 창에서 내 이름을 고르세요. 이 기기에서 적는 내역은 그 이름으로 기록됩니다.</li>
+      <li><b>누구세요?</b> 창에서 내 이름을 고르고 <b>내 비밀번호</b>(숫자 4~8자리)를 넣으세요. 처음이면 새로 만들어요. 이 기기에서 적는 내역은 그 이름으로 기록됩니다.</li>
       <li>이름을 잘못 골랐다면 위쪽 <b>내 이름</b>을 눌러 바꾸면 됩니다.</li>
       <li>시트 없이 <b>이 휴대폰에서만</b> 쓸 수도 있어요. 나중에 시트에 연결하면 그동안 적은 내역도 함께 올라가요.</li>
     </ol>
@@ -629,6 +644,7 @@
       <li><b>가족이 적은 게 안 보여요</b> → 위쪽 "동기화" 글자를 누르면 바로 주고받아요. 상대방 휴대폰이 인터넷에 연결돼야 올라와요.</li>
       <li><b>"보낼 것 N건"이 계속 남아 있어요</b> → 인터넷 연결을 확인하고 위쪽 글자를 눌러 보세요. 이 휴대폰에는 안전하게 저장돼 있어요.</li>
       <li><b>다른 사람 것도 적고 싶어요</b> → 더보기 → 설정 → 사용자 이름에서 "다른 사람 것도 입력"에 체크된 사람만 다른 사람 이름으로 적을 수 있어요.</li>
+      <li><b>비밀번호를 잊어버렸어요</b> → "다른 사람 것도 입력"에 체크된 가족이 더보기 → 설정 → 사용자 이름에서 <b>초기화</b>를 누르면, 다음에 이름을 고를 때 새로 만들 수 있어요.</li>
       <li><b>새 휴대폰으로 바꿨어요</b> → 초대 링크로 다시 연결하면 시트에서 전부 받아와요. 시트 없이 썼다면 예전 휴대폰에서 백업 파일을 만들어 새 휴대폰에서 불러오세요.</li>
     </ul>
   </div>

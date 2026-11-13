@@ -145,7 +145,7 @@ function friendlyError(e) {
 
 /* ---------- 상태 ---------- */
 const emptyState = () => ({ items: [], budgets: {}, annualBudgets: {}, users: [...DEFAULT_USERS], avatars: ['', '', '', '', ''], profile: {}, rules: {}, recurring: [], budgetCarried: null,
-  title: '', canEnter: [0] });   // title: 가계부 이름, canEnter: 다른 사람 이름으로도 입력할 수 있는 사람(0부터)
+  title: '', canEnter: [0], pins: {} });   // title: 가계부 이름, canEnter: 다른 사람 것도 입력할 수 있는 사람(0부터), pins: 사람별 비밀번호 확인값(비밀번호 자체는 저장 안 함)
 let state = emptyState();
 
 /* =========================================================
@@ -231,6 +231,7 @@ async function loadAll() {
 function settingValues() {
   const o = { users: state.users, avatars: state.avatars, profile: state.profile, rules: state.rules, budgetCarried: state.budgetCarried,
     title: state.title || '', canEnter: state.canEnter };
+  for (const [i, p] of Object.entries(state.pins || {})) if (p?.hash) o[`pin:${i}`] = p;   // 사람마다 따로 (동시에 만들어도 안 겹치게)
   for (const [p, v] of Object.entries(state.budgets)) o[`budget:month:${p}`] = v;
   for (const [p, v] of Object.entries(state.annualBudgets)) o[`budget:year:${p}`] = v;
   for (const r of state.recurring) o[`rec:${r.id}`] = r;
@@ -262,6 +263,7 @@ function applySetting(k, v) {
   else if (k === 'budgetCarried') state.budgetCarried = v || null;
   else if (k === 'title') state.title = String(v || '').slice(0, 20);
   else if (k === 'canEnter') state.canEnter = Array.isArray(v) ? v.map(Number).filter(n => n >= 0 && n < 5) : [];
+  else if (k.startsWith('pin:')) { const i = k.slice(4); state.pins = { ...(state.pins || {}) }; if (v?.hash && v?.salt) state.pins[i] = { salt: String(v.salt), hash: String(v.hash) }; else delete state.pins[i]; }
   else if (k.startsWith('budget:month:') || k.startsWith('budget:year:')) {
     const t = k.startsWith('budget:month:') ? state.budgets : state.annualBudgets, p = k.split(':')[2];
     if (v && typeof v === 'object' && Object.keys(v).length) t[p] = v; else delete t[p];
@@ -606,12 +608,78 @@ function openMeDialog(first = false) {
 }
 $('meBtn').onclick = () => openMeDialog();
 $('meDlg').addEventListener('cancel', e => { if ($('meDlg').dataset.first) e.preventDefault(); });   // 처음엔 꼭 선택
-$('meDlg').addEventListener('close', () => {
-  const v = $('meDlg').returnValue;
+$('meDlg').addEventListener('close', async () => {
+  const v = $('meDlg').returnValue, first = !!$('meDlg').dataset.first;
+  $('meDlg').returnValue = '';
   if (v === '' || v == null || isNaN(+v)) return;
-  lsSet(ME_STORE, String(+v));
+  const u = +v;
+  if (u !== me()) {   // 다른 사람으로 바꿀 때는 그 사람 비밀번호 (처음이면 새로 만들기)
+    const ok = await askPin(u, hasPin(u) ? 'verify' : 'create');
+    if (!ok) { if (first || me() == null) openMeDialog(true); return; }
+  }
+  lsSet(ME_STORE, String(u));
   refreshUserSelects(); renderAll();
-  toast(`${state.users[+v]} 님으로 입력합니다`);
+  toast(`${state.users[u]} 님으로 입력합니다`);
+});
+
+/* ---------- 사람별 비밀번호 ----------
+   '누구세요?'에서 사람을 고를 때 그 사람 비밀번호(숫자 4~8자리)를 물음. 처음 고르는 사람은 새로 만듦.
+   시트에는 비밀번호가 아니라 PBKDF2 로 만든 확인값만 저장되어 가족 휴대폰이 함께 씀.
+   (가족끼리 서로 바꿔 입력하지 않게 하는 정도의 잠금이에요. 은행 비밀번호처럼 강한 보안은 아님) */
+const hasPin = u => !!state.pins?.[u]?.hash;
+async function pinHash(pin, salt) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode('ledger-pin:' + salt), iterations: 150000, hash: 'SHA-256' }, key, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const easyPin = p => /^(\d)\1+$/.test(p) || '01234567890'.includes(p) || '98765432109'.includes(p);
+let pinResolve = null, pinMode = '', pinUser = null, pinFails = 0, pinLockUntil = 0;
+// mode: 'verify' 확인, 'create' 새로 만들기. 맞으면 true, 취소하면 false
+function askPin(u, mode) {
+  pinUser = u; pinMode = mode;
+  const name = state.users[u];
+  const making = mode === 'create' || mode === 'recreate';
+  $('pinTitle').textContent = mode === 'recreate' ? `${name} 님 새 비밀번호` : making ? `${name} 님 비밀번호 만들기` : `${name} 님 비밀번호`;
+  $('pinText').textContent = making
+    ? '이 이름으로 입력할 때 쓸 숫자 비밀번호를 정해 주세요. 가족 휴대폰 어디서든 이 이름을 고를 때 물어봐요.'
+    : '본인 비밀번호를 넣어 주세요.';
+  $('pinInput').value = ''; $('pinInput2').value = ''; $('pinMsg').textContent = '';
+  $('pinInput2').hidden = !making;
+  $('pinDlg').showModal();
+  setTimeout(() => $('pinInput').focus(), 50);
+  return new Promise(r => { pinResolve = r; });
+}
+function finishPin(ok) {
+  const r = pinResolve; pinResolve = null;
+  if ($('pinDlg').open) $('pinDlg').close();
+  r?.(ok);
+}
+$('pinDlg').addEventListener('cancel', e => { e.preventDefault(); finishPin(false); });
+$('pinCancel').onclick = () => finishPin(false);
+$('pinForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const p = $('pinInput').value.trim(), msg = t => { $('pinMsg').textContent = t; };
+  if (!/^\d{4,8}$/.test(p)) return msg('숫자 4~8자리로 넣어 주세요.');
+  $('pinOk').disabled = true;
+  try {
+    if (pinMode === 'create' || pinMode === 'recreate') {
+      if (p !== $('pinInput2').value.trim()) return msg('두 번 넣은 비밀번호가 달라요.');
+      if (easyPin(p)) return msg('너무 쉬운 비밀번호예요. 같은 숫자 반복이나 1234 같은 연속 숫자는 피해 주세요.');
+      // 그사이 다른 휴대폰에서 이미 만들었는지 시트를 한 번 확인
+      if (pinMode === 'create' && conn?.url) { await syncNow(); if (hasPin(pinUser)) { pinMode = 'verify'; $('pinInput2').hidden = true; $('pinTitle').textContent = `${state.users[pinUser]} 님 비밀번호`; return msg('이미 다른 휴대폰에서 만든 비밀번호가 있어요. 그 비밀번호를 넣어 주세요.'); } }
+      const salt = uuid();
+      state.pins = { ...(state.pins || {}), [pinUser]: { salt, hash: await pinHash(p, salt) } };
+      await run('비밀번호 저장', saveSpace);
+      toast('비밀번호를 만들었어요. 잊지 않게 기억해 두세요');
+      return finishPin(true);
+    }
+    if (Date.now() < pinLockUntil) return msg(`여러 번 틀렸어요. ${Math.ceil((pinLockUntil - Date.now()) / 1000)}초 뒤에 다시 해 주세요.`);
+    const rec = state.pins?.[pinUser];
+    if (rec && await pinHash(p, rec.salt) === rec.hash) { pinFails = 0; return finishPin(true); }
+    if (++pinFails >= 5) { pinFails = 0; pinLockUntil = Date.now() + 30000; }
+    msg('비밀번호가 맞지 않아요.'); $('pinInput').select();
+  } finally { $('pinOk').disabled = false; }
 });
 function refreshMethods() {
   const set = new Set([...state.items.map(i => i.method), ...state.recurring.map(r => r.method)].filter(Boolean));
@@ -1960,7 +2028,10 @@ function renderSettings() {
   $('userNames').innerHTML = usersShuffled().map(([n, i]) =>
     `<div class="un"><div class="un-head">${userBadge(i)}<button type="button" class="av-pick" data-av="${i}">${state.avatars[i] ? '바꾸기' : '캐릭터'}</button></div>
       <input data-u="${i}" value="${esc(n)}" maxlength="12" aria-label="${i + 1}번 사용자 이름" style="width:100%;margin-top:6px">
-      <label class="ce-pick"><input type="checkbox" data-ce="${i}"${(state.canEnter || []).includes(i) ? ' checked' : ''}> 다른 사람 것도 입력</label></div>`).join('');
+      <label class="ce-pick"><input type="checkbox" data-ce="${i}"${(state.canEnter || []).includes(i) ? ' checked' : ''}> 다른 사람 것도 입력</label>
+      <div class="ce-pick">🔒 비밀번호 ${hasPin(i) ? '있음' : '없음'}
+        ${i === me() ? `<button type="button" class="btn sm ghost" data-pin="change" data-pu="${i}">${hasPin(i) ? '바꾸기' : '만들기'}</button>`
+          : canPickUser() && hasPin(i) ? `<button type="button" class="btn sm ghost" data-pin="reset" data-pu="${i}">초기화</button>` : ''}</div></div>`).join('');
   if (document.activeElement !== $('bookTitle')) $('bookTitle').value = state.title || '';
   renderConn(); renderBackupInfo();
 }
@@ -2007,6 +2078,20 @@ $('userNames').addEventListener('change', async e => {
   state.users = state.users.slice(); state.users[+i] = e.target.value.trim() || `user${+i + 1}`;
   try { await run('이름 저장', saveSpace); } catch {}
   refreshUserSelects(); renderSettings();
+});
+// 비밀번호 바꾸기(본인) / 초기화(다른 사람 것도 입력할 수 있는 사람만 — 잊어버렸을 때)
+$('userNames').addEventListener('click', async e => {
+  const b = e.target.closest('[data-pin]'); if (!b) return;
+  const u = +b.dataset.pu;
+  if (b.dataset.pin === 'change') {
+    if (hasPin(u)) { if (!(await askPin(u, 'verify'))) return; await askPin(u, 'recreate'); }
+    else await askPin(u, 'create');
+  } else if (b.dataset.pin === 'reset') {
+    if (!confirm(`${state.users[u]} 님 비밀번호를 지울까요?\n다음에 이 이름을 고를 때 비밀번호를 새로 만들어요.`)) return;
+    state.pins = { ...state.pins }; delete state.pins[u];
+    try { await run('비밀번호 초기화', saveSpace); toast(`${state.users[u]} 님 비밀번호를 지웠어요`); } catch {}
+  }
+  renderSettings();
 });
 // 사용자 캐릭터 고르기
 let avTarget = null;
