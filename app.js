@@ -613,8 +613,8 @@ $('meDlg').addEventListener('close', async () => {
   $('meDlg').returnValue = '';
   if (v === '' || v == null || isNaN(+v)) return;
   const u = +v;
-  if (u !== me()) {   // 다른 사람으로 바꿀 때는 그 사람 비밀번호 (처음이면 새로 만들기)
-    const ok = await askPin(u, hasPin(u) ? 'verify' : 'create');
+  if (u !== me()) {   // 다른 사람으로 바꿀 때는 그 사람 비밀번호 (처음 비밀번호는 이름 → 바로 새로 정함)
+    const ok = await askPin(u, 'verify');
     if (!ok) { if (first || me() == null) openMeDialog(true); return; }
   }
   lsSet(ME_STORE, String(u));
@@ -623,7 +623,8 @@ $('meDlg').addEventListener('close', async () => {
 });
 
 /* ---------- 사람별 비밀번호 ----------
-   '누구세요?'에서 사람을 고를 때 그 사람 비밀번호(숫자 4~8자리)를 물음. 처음 고르는 사람은 새로 만듦.
+   '누구세요?'에서 사람을 고를 때 그 사람 비밀번호를 물음.
+   처음 비밀번호는 '자기 이름'(예: hyun). 이름으로 들어오면 바로 새 비밀번호를 정해야 해요.
    시트에는 비밀번호가 아니라 PBKDF2 로 만든 확인값만 저장되어 가족 휴대폰이 함께 씀.
    (가족끼리 서로 바꿔 입력하지 않게 하는 정도의 잠금이에요. 은행 비밀번호처럼 강한 보안은 아님) */
 const hasPin = u => !!state.pins?.[u]?.hash;
@@ -633,21 +634,28 @@ async function pinHash(pin, salt) {
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode('ledger-pin:' + salt), iterations: 150000, hash: 'SHA-256' }, key, 256);
   return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
-const easyPin = p => /^(\d)\1+$/.test(p) || '01234567890'.includes(p) || '98765432109'.includes(p);
+const samePw = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+const easyPin = p => /^\d+$/.test(p) && (/^(\d)\1+$/.test(p) || '01234567890'.includes(p) || '98765432109'.includes(p));
 let pinResolve = null, pinMode = '', pinUser = null, pinFails = 0, pinLockUntil = 0;
-// mode: 'verify' 확인, 'create' 새로 만들기. 맞으면 true, 취소하면 false
-function askPin(u, mode) {
-  pinUser = u; pinMode = mode;
-  const name = state.users[u];
-  const making = mode === 'create' || mode === 'recreate';
-  $('pinTitle').textContent = mode === 'recreate' ? `${name} 님 새 비밀번호` : making ? `${name} 님 비밀번호 만들기` : `${name} 님 비밀번호`;
-  $('pinText').textContent = making
-    ? '이 이름으로 입력할 때 쓸 숫자 비밀번호를 정해 주세요. 가족 휴대폰 어디서든 이 이름을 고를 때 물어봐요.'
-    : '본인 비밀번호를 넣어 주세요.';
-  $('pinInput').value = ''; $('pinInput2').value = ''; $('pinMsg').textContent = '';
+// 비밀번호 창 모양: verify 확인 / create 처음 정하기(이름으로 들어온 뒤) / recreate 바꾸기
+function setPinMode(mode, note = '') {
+  pinMode = mode;
+  const name = state.users[pinUser], making = mode !== 'verify';
+  $('pinTitle').textContent = mode === 'verify' ? `${name} 님 비밀번호` : `${name} 님 새 비밀번호`;
+  $('pinText').textContent = mode === 'verify'
+    ? (hasPin(pinUser) ? '본인 비밀번호를 넣어 주세요.' : `처음 비밀번호는 이름(${name})이에요. 넣으면 바로 새 비밀번호로 바꿔요.`)
+    : mode === 'create' ? '처음 비밀번호(이름)는 가족 모두 알 수 있어요. 나만 아는 새 비밀번호로 바꿔 주세요.'
+    : '새 비밀번호를 두 번 넣어 주세요.';
+  $('pinInput').value = ''; $('pinInput2').value = ''; $('pinMsg').textContent = note;
+  $('pinInput').placeholder = making ? '새 비밀번호 (4~20자)' : '비밀번호';
   $('pinInput2').hidden = !making;
-  $('pinDlg').showModal();
   setTimeout(() => $('pinInput').focus(), 50);
+}
+// 맞으면 true, 취소하면 false
+function askPin(u, mode) {
+  pinUser = u;
+  setPinMode(mode);
+  $('pinDlg').showModal();
   return new Promise(r => { pinResolve = r; });
 }
 function finishPin(ok) {
@@ -660,26 +668,48 @@ $('pinCancel').onclick = () => finishPin(false);
 $('pinForm').addEventListener('submit', async e => {
   e.preventDefault();
   const p = $('pinInput').value.trim(), msg = t => { $('pinMsg').textContent = t; };
-  if (!/^\d{4,8}$/.test(p)) return msg('숫자 4~8자리로 넣어 주세요.');
+  const name = state.users[pinUser];
+  if (!p) return msg('비밀번호를 넣어 주세요.');
   $('pinOk').disabled = true;
   try {
     if (pinMode === 'create' || pinMode === 'recreate') {
+      if (p.length < 4 || p.length > 20) return msg('새 비밀번호는 4~20자로 정해 주세요.');
       if (p !== $('pinInput2').value.trim()) return msg('두 번 넣은 비밀번호가 달라요.');
+      if (samePw(p, name)) return msg('이름과 다른 비밀번호로 정해 주세요.');
       if (easyPin(p)) return msg('너무 쉬운 비밀번호예요. 같은 숫자 반복이나 1234 같은 연속 숫자는 피해 주세요.');
-      // 그사이 다른 휴대폰에서 이미 만들었는지 시트를 한 번 확인
-      if (pinMode === 'create' && conn?.url) { await syncNow(); if (hasPin(pinUser)) { pinMode = 'verify'; $('pinInput2').hidden = true; $('pinTitle').textContent = `${state.users[pinUser]} 님 비밀번호`; return msg('이미 다른 휴대폰에서 만든 비밀번호가 있어요. 그 비밀번호를 넣어 주세요.'); } }
+      // 그사이 다른 휴대폰에서 이미 바꿨는지 시트를 한 번 확인
+      if (pinMode === 'create' && conn?.url) {
+        await syncNow();
+        if (hasPin(pinUser)) { setPinMode('verify', '그사이 다른 휴대폰에서 비밀번호를 바꿨어요. 바꾼 비밀번호를 넣어 주세요.'); return; }
+      }
       const salt = uuid();
       state.pins = { ...(state.pins || {}), [pinUser]: { salt, hash: await pinHash(p, salt) } };
       await run('비밀번호 저장', saveSpace);
-      toast('비밀번호를 만들었어요. 잊지 않게 기억해 두세요');
+      toast('새 비밀번호로 바꿨어요. 잊지 않게 기억해 두세요');
       return finishPin(true);
     }
     if (Date.now() < pinLockUntil) return msg(`여러 번 틀렸어요. ${Math.ceil((pinLockUntil - Date.now()) / 1000)}초 뒤에 다시 해 주세요.`);
     const rec = state.pins?.[pinUser];
-    if (rec && await pinHash(p, rec.salt) === rec.hash) { pinFails = 0; return finishPin(true); }
+    const ok = rec ? await pinHash(p, rec.salt) === rec.hash : samePw(p, name);
+    if (ok) {
+      pinFails = 0;
+      if (!rec) { setPinMode('create'); return; }   // 이름으로 들어왔으면 바로 새 비밀번호 정하기
+      return finishPin(true);
+    }
     if (++pinFails >= 5) { pinFails = 0; pinLockUntil = Date.now() + 30000; }
     msg('비밀번호가 맞지 않아요.'); $('pinInput').select();
   } finally { $('pinOk').disabled = false; }
+});
+// 이름(처음 비밀번호)을 아직 안 바꾼 사람에게 홈에서 알림
+function renderPinNotice() {
+  const m = me();
+  $('pinNotice').hidden = !(m != null && !hasPin(m));
+}
+$('pinNotice').addEventListener('click', async e => {
+  if (e.target.closest('button')?.dataset.act !== 'pin-change') return;
+  const m = me(); if (m == null) return;
+  pinUser = m;
+  if (await askPin(m, 'create')) renderAll();
 });
 function refreshMethods() {
   const set = new Set([...state.items.map(i => i.method), ...state.recurring.map(r => r.method)].filter(Boolean));
@@ -719,7 +749,7 @@ const home = { open: null, edit: null, all: new Set(), others: {} };   // open/e
 const PEEK = 3, MAX_BLOCKS = 6;
 
 function renderHome() {
-  renderSettleNotice(); renderPlanNotice(); renderBackupNotice();
+  renderSettleNotice(); renderPlanNotice(); renderBackupNotice(); renderPinNotice();
   const m = $('month').value, pm = shiftMonth(m, -1), y = m.slice(0, 4);
   const cur = state.items.filter(i => i.date.startsWith(m));
   const prev = state.items.filter(i => i.date.startsWith(pm));
@@ -2029,8 +2059,8 @@ function renderSettings() {
     `<div class="un"><div class="un-head">${userBadge(i)}<button type="button" class="av-pick" data-av="${i}">${state.avatars[i] ? '바꾸기' : '캐릭터'}</button></div>
       <input data-u="${i}" value="${esc(n)}" maxlength="12" aria-label="${i + 1}번 사용자 이름" style="width:100%;margin-top:6px">
       <label class="ce-pick"><input type="checkbox" data-ce="${i}"${(state.canEnter || []).includes(i) ? ' checked' : ''}> 다른 사람 것도 입력</label>
-      <div class="ce-pick">🔒 비밀번호 ${hasPin(i) ? '있음' : '없음'}
-        ${i === me() ? `<button type="button" class="btn sm ghost" data-pin="change" data-pu="${i}">${hasPin(i) ? '바꾸기' : '만들기'}</button>`
+      <div class="ce-pick">🔒 ${hasPin(i) ? '비밀번호 바꿈' : '처음 비밀번호(이름)'}
+        ${i === me() ? `<button type="button" class="btn sm ghost" data-pin="change" data-pu="${i}">바꾸기</button>`
           : canPickUser() && hasPin(i) ? `<button type="button" class="btn sm ghost" data-pin="reset" data-pu="${i}">초기화</button>` : ''}</div></div>`).join('');
   if (document.activeElement !== $('bookTitle')) $('bookTitle').value = state.title || '';
   renderConn(); renderBackupInfo();
@@ -2087,9 +2117,9 @@ $('userNames').addEventListener('click', async e => {
     if (hasPin(u)) { if (!(await askPin(u, 'verify'))) return; await askPin(u, 'recreate'); }
     else await askPin(u, 'create');
   } else if (b.dataset.pin === 'reset') {
-    if (!confirm(`${state.users[u]} 님 비밀번호를 지울까요?\n다음에 이 이름을 고를 때 비밀번호를 새로 만들어요.`)) return;
+    if (!confirm(`${state.users[u]} 님 비밀번호를 처음 비밀번호(이름: ${state.users[u]})로 되돌릴까요?\n이름으로 들어와서 새 비밀번호를 정하면 돼요.`)) return;
     state.pins = { ...state.pins }; delete state.pins[u];
-    try { await run('비밀번호 초기화', saveSpace); toast(`${state.users[u]} 님 비밀번호를 지웠어요`); } catch {}
+    try { await run('비밀번호 초기화', saveSpace); toast(`${state.users[u]} 님 비밀번호를 이름으로 되돌렸어요`); } catch {}
   }
   renderSettings();
 });
