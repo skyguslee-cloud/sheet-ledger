@@ -157,8 +157,10 @@ let state = emptyState();
    ========================================================= */
 // 테스트용: 주소에 ?dev=a 를 붙이면 같은 브라우저 안에서 다른 기기처럼 따로 저장
 const NS = (new URLSearchParams(location.search).get('dev') || '').replace(/[^\w-]/g, '').slice(0, 20);
-const lsGet = k => { try { return localStorage.getItem(NS ? `${NS}:${k}` : k); } catch { return null; } };
-const lsSet = (k, v) => { try { const kk = NS ? `${NS}:${k}` : k; v == null ? localStorage.removeItem(kk) : localStorage.setItem(kk, v); } catch {} };
+// 이 기기 작은 저장값(누구세요?, 백업 날짜 등). 같은 주소(github.io)의 기존 가계부 앱과 섞이지 않게 앞에 'sheet-ledger:'를 붙임
+const LS_PREFIX = 'sheet-ledger:' + (NS ? `${NS}:` : '');
+const lsGet = k => { try { return localStorage.getItem(LS_PREFIX + k); } catch { return null; } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(LS_PREFIX + k) : localStorage.setItem(LS_PREFIX + k, v); } catch {} };
 const BACKUP_AT = 'ledger-backup-at', BACKUP_SNOOZE = 'ledger-backup-snooze', DAY = 864e5;
 
 function uuid() {
