@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="가계부">
+<meta name="apple-mobile-web-app-title" content="시트가계부">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="style.css">
@@ -41,6 +41,7 @@
     <div class="card gate">
       <h2>시작하기</h2>
       <p class="muted">입력한 내역은 <b>먼저 이 휴대폰에 저장</b>되고, 인터넷이 되면 가족이 함께 쓰는 <b>구글 시트</b>와 주고받아요. 인터넷이 안 돼도 입력할 수 있어요.</p>
+      <button type="button" class="btn primary block" id="gateInstall" hidden>📲 먼저 휴대폰에 앱으로 설치하기</button>
       <div class="notice" id="gateIos" hidden>
         <div><b>아이폰은 먼저 홈 화면에 추가해 주세요</b><small>사파리에서 쓰면 오래 안 열었을 때 저장된 내역이 지워질 수 있어요. 아래 공유 버튼(□↑) → <b>홈 화면에 추가</b> → 홈 화면 아이콘으로 열어서 연결하세요.</small></div>
       </div>
@@ -88,6 +89,10 @@
       <div class="notice" id="pinNotice" hidden>
         <div><b>비밀번호를 바꿔 주세요</b><small>지금 비밀번호는 내 이름이라 가족 누구나 알 수 있어요. 나만 아는 비밀번호로 바꿔 주세요.</small></div>
         <span class="filters"><button type="button" class="btn sm primary" data-act="pin-change">지금 바꾸기</button></span>
+      </div>
+      <div class="notice" id="appNotice" hidden>
+        <div><b>휴대폰에 앱으로 설치하세요</b><small>홈 화면 아이콘으로 바로 열리고, 저장된 내역도 더 안전하게 지켜져요.</small></div>
+        <span class="filters"><button type="button" class="btn sm ghost" data-act="app-later">나중에</button><button type="button" class="btn sm primary" data-act="app-install">설치하기</button></span>
       </div>
       <div class="notice" id="iosNotice" hidden>
         <div><b>홈 화면에 추가해 주세요</b><small>아이폰 사파리에서 그냥 쓰면, 오래 안 열었을 때 이 휴대폰에 저장된 내역이 지워질 수 있어요. 공유 버튼(□↑) → <b>홈 화면에 추가</b> 후 아이콘으로 여세요.</small></div>

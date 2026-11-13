@@ -1,13 +1,16 @@
 {
+  "id": "./",
   "name": "우리집 가계부 (시트)",
-  "short_name": "가계부",
+  "short_name": "시트가계부",
   "description": "휴대폰에 저장하고 구글 시트로 가족과 함께 쓰는 가계부",
   "lang": "ko",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f6f6f6",
   "theme_color": "#0a0a0a",
+  "categories": ["finance"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

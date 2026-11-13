@@ -2337,10 +2337,21 @@ setInterval(() => { if (needRender && !isBusyEditing()) { needRender = false; re
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 function renderInstallHint() {
-  const show = isIOS() && !isStandalone() && Date.now() > (+lsGet('ledger-ios-snooze') || 0);
-  $('iosNotice').hidden = !show;
+  const snoozed = Date.now() <= (+lsGet('ledger-ios-snooze') || 0);
+  $('iosNotice').hidden = !(isIOS() && !isStandalone() && !snoozed);
   $('gateIos').hidden = !(isIOS() && !isStandalone());
+  // 안드로이드 크롬 등: 브라우저가 '설치 가능'이라고 알려주면 홈과 시작 화면에 설치 버튼
+  const canInstall = !!installPrompt && !isStandalone();
+  $('appNotice').hidden = !(canInstall && !snoozed);
+  $('gateInstall').hidden = !canInstall;
+  $('installBtn').hidden = !canInstall;
 }
+$('appNotice').addEventListener('click', e => {
+  const act = e.target.closest('button')?.dataset.act;
+  if (act === 'app-install') installApp();
+  else if (act === 'app-later') { lsSet('ledger-ios-snooze', String(Date.now() + 3 * DAY)); renderInstallHint(); }
+});
+$('gateInstall').onclick = () => installApp();
 $('iosNotice').addEventListener('click', e => {
   const act = e.target.closest('button')?.dataset.act;
   if (act === 'ios-how') openHelp();
@@ -2441,14 +2452,15 @@ $('helpDlg').addEventListener('click', e => {
 });
 
 /* ---------- 홈 화면 앱(PWA) ---------- */
-let installPrompt = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; $('installBtn').hidden = false; });
-window.addEventListener('appinstalled', () => { installPrompt = null; $('installBtn').hidden = true; toast('홈 화면에 설치했어요'); });
+var installPrompt = null;   // var: 위쪽 renderInstallHint 에서도 씀
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; renderInstallHint(); });
+window.addEventListener('appinstalled', () => { installPrompt = null; renderInstallHint(); toast('홈 화면에 설치했어요. 이제 홈 화면 아이콘으로 여세요'); });
 async function installApp() {
-  if (!installPrompt) return openHelp();
+  if (!installPrompt) return openHelp();   // 설치 창을 못 띄우는 브라우저면 사용법(설치 방법)
   installPrompt.prompt();
-  await installPrompt.userChoice.catch(() => {});
-  installPrompt = null; $('installBtn').hidden = true;
+  await installPrompt.userChoice.catch(() => null);
+  installPrompt = null;   // 설치 창은 한 번만 띄울 수 있음 (브라우저가 나중에 다시 알려주면 버튼이 다시 생김)
+  renderInstallHint();
 }
 if ('serviceWorker' in navigator && location.protocol !== 'file:' && !NS)
   navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e));
